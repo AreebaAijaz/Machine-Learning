@@ -16,7 +16,7 @@ A simple Linear Regression model trained to predict salary based on years of wor
 
 ## Model Performance
 - **R² Score:** 0.89
-- **RMSE:** ~$7,893
+- **RMSE:** ~7,893
 
 ## Tools Used
 - Python
