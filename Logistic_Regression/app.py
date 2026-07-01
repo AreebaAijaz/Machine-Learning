@@ -2,10 +2,15 @@ import streamlit as st
 import pandas as pd
 import joblib
 import plotly.express as px
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, "model", "churn_model.pkl")
+
 
 st.set_page_config(page_title="Customer Churn Predictor", layout="wide")
 
-model = joblib.load("model/churn_model.pkl")
+model = joblib.load(MODEL_PATH)
 
 st.title("📊 Customer Churn Predictor")
 st.markdown("Predict which customers are likely to churn — single customer or bulk CSV upload.")
