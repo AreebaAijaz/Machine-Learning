@@ -11,7 +11,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # ---------- Config ----------
-API_URL = st.secrets.get("API_URL", "http://localhost:8000")  # replace with deployed backend URL
+API_URL = "https://machine-learning-2-15wf.onrender.com" # replace with deployed backend URL
 
 CROPS = ["Rice", "Maize", "Moong(Green Gram)", "Urad", "Groundnut"]
 SEASONS = ["Autumn", "Kharif", "Rabi", "Summer", "Whole Year", "Winter"]
