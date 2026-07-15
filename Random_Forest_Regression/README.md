@@ -4,7 +4,7 @@ A machine learning project that predicts crop yield (tons/hectare) based on farm
 
 **Live app:** https://crop-yield-prooduction.streamlit.app/
 
-**API:** https://machine-learning-2-15wf.onrender.com
+**API:** https://machine-learning-2-15wf.onrender.com/docs
 
 ## About the project
 
