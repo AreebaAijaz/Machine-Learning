@@ -4,7 +4,7 @@ ML-powered system to predict customer churn risk for subscription/telecom busine
 
 ## 🔗 Live Demo
 - **Web App:** https://customer-churn-predictor32.streamlit.app/
-- **API Docs:** https://machine-learning-66d7.onrender.com/docs
+- **API Docs:** https://logistic-regression-pwx8.onrender.com/docs
 
 ## 📊 Model Performance
 - Algorithm: Logistic Regression (with class balancing)
