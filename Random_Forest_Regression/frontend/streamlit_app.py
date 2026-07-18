@@ -1,16 +1,22 @@
 """
 Streamlit frontend for the Crop Yield Prediction project.
 
-Sends farm details to the FastAPI backend and shows the predicted yield,
-styled around a harvest/field theme rather than default Streamlit chrome.
+Loads the trained model directly (instead of calling the FastAPI backend) so
+predictions are instant, with no cold-start delay from a sleeping free-tier API.
+The FastAPI backend still exists separately as the project's API layer.
 """
 
 import streamlit as st
-import requests
 import pandas as pd
+import joblib
+import os
 
 # ---------- Config ----------
-API_URL = "https://machine-learning-2-15wf.onrender.com"
+MODEL_DIR = os.path.join(os.path.dirname(__file__), "model")
+MODEL_PATH = os.path.join(MODEL_DIR, "crop_yield_rf_model.pkl")
+COLUMNS_PATH = os.path.join(MODEL_DIR, "crop_yield_model_columns.pkl")
+
+YEAR_MIN = 1997  # matches df['year'].min() used during training
 
 CROPS = ["Rice", "Maize", "Moong(Green Gram)", "Urad", "Groundnut"]
 SEASONS = ["Autumn", "Kharif", "Rabi", "Summer", "Whole Year", "Winter"]
@@ -38,6 +44,43 @@ CROP_ICON = {
 }
 
 st.set_page_config(page_title="Crop Yield Predictor", page_icon="🌾", layout="centered")
+
+
+# ---------- Load model once, cached across reruns ----------
+@st.cache_resource
+def load_model():
+    model = joblib.load(MODEL_PATH)
+    model_columns = joblib.load(COLUMNS_PATH)
+    return model, model_columns
+
+
+def build_feature_row(crop, season, state, area, fertilizer, pesticide, year, model_columns):
+    """
+    Turns raw form input into the exact same feature format the model was trained on:
+    per-hectare fertilizer/pesticide, years since 1997, and one-hot encoded
+    crop/season/state columns (matching model_columns exactly, same order).
+    """
+    row = {col: 0 for col in model_columns}
+
+    row["area"] = area
+    row["fertilizer_per_area"] = fertilizer / area
+    row["pesticide_per_area"] = pesticide / area
+    row["years_since_start"] = year - YEAR_MIN
+
+    for col in (f"crop_{crop}", f"season_{season}", f"state_{state}"):
+        if col in row:
+            row[col] = 1
+
+    return pd.DataFrame([row])[model_columns]
+
+
+try:
+    model, model_columns = load_model()
+    model_load_error = None
+except Exception as e:
+    model, model_columns = None, None
+    model_load_error = str(e)
+
 
 # ---------- Custom styling ----------
 st.markdown("""
@@ -187,6 +230,14 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+if model_load_error:
+    st.error(
+        "Could not load the model file. Make sure 'crop_yield_rf_model.pkl' and "
+        "'crop_yield_model_columns.pkl' are inside the 'model/' folder next to this app.\n\n"
+        f"Details: {model_load_error}"
+    )
+    st.stop()
+
 tab_predict, tab_batch, tab_about = st.tabs(["Predict", "Batch upload", "About this model"])
 
 # ---------- Tab 1: single prediction ----------
@@ -209,14 +260,9 @@ with tab_predict:
     st.markdown('</div>', unsafe_allow_html=True)
 
     if predict_clicked:
-        payload = {
-            "crop": crop, "season": season, "state": state,
-            "area": area, "fertilizer": fertilizer, "pesticide": pesticide, "year": int(year),
-        }
         try:
-            response = requests.post(f"{API_URL}/predict", json=payload, timeout=15)
-            response.raise_for_status()
-            result = response.json()["predicted_yield"]
+            features = build_feature_row(crop, season, state, area, fertilizer, pesticide, int(year), model_columns)
+            result = round(float(model.predict(features)[0]), 3)
 
             ref = CROP_REFERENCE[crop]
             fill_pct = max(0, min(100, (result / ref["max"]) * 100))
@@ -240,8 +286,8 @@ with tab_predict:
             </div>
             """, unsafe_allow_html=True)
 
-        except requests.exceptions.RequestException as e:
-            st.error(f"Could not reach the prediction API: {e}")
+        except Exception as e:
+            st.error(f"Couldn't generate a prediction: {e}")
 
 # ---------- Tab 2: batch prediction via CSV ----------
 with tab_batch:
@@ -257,13 +303,14 @@ with tab_batch:
             predictions = []
             progress = st.progress(0)
             for i, row in batch_df.iterrows():
-                payload = row[["crop", "season", "state", "area", "fertilizer", "pesticide", "year"]].to_dict()
-                payload["year"] = int(payload["year"])
                 try:
-                    response = requests.post(f"{API_URL}/predict", json=payload, timeout=15)
-                    response.raise_for_status()
-                    predictions.append(response.json()["predicted_yield"])
-                except requests.exceptions.RequestException:
+                    features = build_feature_row(
+                        row["crop"], row["season"], row["state"],
+                        float(row["area"]), float(row["fertilizer"]), float(row["pesticide"]),
+                        int(row["year"]), model_columns,
+                    )
+                    predictions.append(round(float(model.predict(features)[0]), 3))
+                except Exception:
                     predictions.append(None)
                 progress.progress((i + 1) / len(batch_df))
 
@@ -283,6 +330,9 @@ with tab_about:
     This model predicts crop yield (tons/hectare) using a **Random Forest Regressor**,
     trained on Indian government agricultural data narrowed down to 5 commonly grown crops:
     Rice, Maize, Moong (Green Gram), Urad, and Groundnut.
+
+    This app loads the trained model directly for instant predictions. A separate FastAPI
+    backend also exposes the same model through a REST API.
 
     **Model performance on held-out test data:**
     - MAE: 0.23 tons/hectare
